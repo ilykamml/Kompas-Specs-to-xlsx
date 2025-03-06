@@ -25,24 +25,18 @@ def get_kompas_api7():  # Получаем АПИ компас 7 версии
     return module, api, const, app
 
 
-def convert_spw_to_xls(sp_file_path, kompas_api):
-
-    
+def convert_spw_to_xls(spw_file, xls_file=None, kompas_api=None):
 
     try:
-        # pythoncom.CoInitialize()
-        # prog_id = "KOMPAS.Application.7"
-        # kmpsApp = Dispatch(prog_id)
-        # if kmpsApp is None:
-        #     print("КОМПАС не установлен")
-        #     return ""
 
-        module7, api7, const7, app7 = kompas_api
+        if kompas_api is not None:
+            module7, api7, const7, app7 = kompas_api
+        else:
+             module7, api7, const7, app7 = get_kompas_api7()
 
         print("Начало конвертации...")
         
-        # Формируем полный путь к spw файлу
-        spw_file = sp_file_path + ".spw"
+        
         if not os.path.exists(spw_file):
             print(f"Файл не найден: {spw_file}")
             return ""
@@ -56,9 +50,10 @@ def convert_spw_to_xls(sp_file_path, kompas_api):
                                    ReadOnly=True)
         
         if doc7 is not None:
-            out_file = sp_file_path + '.xls'
-            doc7.SaveAs(out_file)
-            print(f'Файл {out_file} сохранён!')
+            if xls_file is None:
+                xls_file = spw_file[:-4] + '.xls'
+            doc7.SaveAs(xls_file)
+            print(f'Файл {xls_file} сохранён!')
         else:
             print('Не удалось сохранить документ')
             return ""
@@ -67,24 +62,63 @@ def convert_spw_to_xls(sp_file_path, kompas_api):
 
         doc7.Close(const7.kdDoNotSaveChanges)
 
-        # kmpsdoc = kmpsApp.Documents.Open(spw_file)
-        # if kmpsdoc is not None:
-        #     # Отключаем показ сообщений (аналог ksHideMessageYes)
-        #     kmpsApp.HideMessage = True
-        #     out_file = sp_file_path + ".xls"
-        #     kmpsdoc.SaveAs(out_file)
-        #     print(f"Файл [{out_file}] сохранен!")
-        # else:
-        #     print("Не удалось открыть документ.")
-        
-
-        return out_file
+        return xls_file
     except Exception as e:
         print(f"Ошибка: {e}")
         return ""
+    
+
+def search_spw(directory):
+    # Проверяем, существует ли директория и является ли она каталогом
+    if not os.path.isdir(directory):
+        print(f"Директория не найдена или не является каталогом: {directory}")
+        return []
+    
+    spw_files = []
+    # Проходим по директории и подпапкам
+    for root, _, files in os.walk(directory):
+        for file in files:
+            if file.lower().endswith('.spw'):
+                spw_files.append(os.path.abspath(os.path.join(root, file)))
+    return spw_files
+
+
+def do_a_path_for_xls(spws, output_dir):
+    # Приводим output_dir к абсолютному пути, если он не абсолютный
+    if not os.path.isabs(output_dir):
+        output_dir = os.path.abspath(output_dir)
+    # Если директории нет - создаем её
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    
+    xls_files = []
+    for spw in spws:
+        # Извлекаем имя файла без расширения
+        base_name = os.path.splitext(os.path.basename(spw))[0]
+        # Формируем путь к xls файлу с таким же именем
+        xls_path = os.path.join(output_dir, base_name + '.xls')
+        xls_files.append(xls_path)
+        
+    return xls_files
+
+
+def send_to_converter(spws, xlss):
+    kompas_api = get_kompas_api7()
+    zipped = zip(spws, xlss)
+    all = len(spws)
+    i = 1
+    for spw, xls in zipped:
+        convert_spw_to_xls(spw, xls, kompas_api)
+        print(f'{i}/{all}')
+        i+=1
 
 
 if __name__ == "__main__":
     # Задайте путь к файлу без расширения
-    sp_file_path = r"O:\Python projects\Kompas Specs to xlsx\sample"
-    convert_spw_to_xls(sp_file_path)
+    # kompas_api = get_kompas_api7()
+    # sp_file_path = r"O:\Python projects\Kompas Specs to xlsx\sample.spw"
+    # convert_spw_to_xls(sp_file_path, kompas_api)
+    dir = '415.1-Сварочный портал'
+    spws = search_spw(dir)
+    xlss = do_a_path_for_xls(spws, 'xls_out')
+    send_to_converter(spws, xlss)
