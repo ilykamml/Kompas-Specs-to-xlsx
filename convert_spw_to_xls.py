@@ -2,6 +2,7 @@ import os
 import time
 import pythoncom
 from win32com.client import Dispatch, DispatchEx, gencache, GetActiveObject
+import threading
 
 
 def get_kompas_api7():  # Получаем АПИ компас 7 версии
@@ -25,18 +26,14 @@ def get_kompas_api7():  # Получаем АПИ компас 7 версии
     return module, api, const, app
 
 
-def convert_spw_to_xls(spw_file, xls_file=None, kompas_api=None):
+def convert_spw_to_xls(spw_file, xls_file, kompas_api):
 
     try:
 
-        if kompas_api is not None:
-            module7, api7, const7, app7 = kompas_api
-        else:
-             module7, api7, const7, app7 = get_kompas_api7()
+        module7, api7, const7, app7 = kompas_api
 
         print("Начало конвертации...")
-        
-        
+                
         if not os.path.exists(spw_file):
             print(f"Файл не найден: {spw_file}")
             return ""
@@ -50,8 +47,6 @@ def convert_spw_to_xls(spw_file, xls_file=None, kompas_api=None):
                                    ReadOnly=True)
         
         if doc7 is not None:
-            if xls_file is None:
-                xls_file = spw_file[:-4] + '.xls'
             doc7.SaveAs(xls_file)
             print(f'Файл {xls_file} сохранён!')
         else:
@@ -66,6 +61,43 @@ def convert_spw_to_xls(spw_file, xls_file=None, kompas_api=None):
     except Exception as e:
         print(f"Ошибка: {e}")
         return ""
+
+
+def convert_spw_to_xls_array(spw_files, xls_files, chunk_size=10):
+    if len(spw_files) != len(xls_files):
+        print("Количество spw файлов и xls файлов не совпадает.")
+        return
+
+    def process_chunk(chunk_spw, chunk_xls):
+        import pythoncom
+        pythoncom.CoInitialize()
+        # Обрабатываем каждый файл в данном чанке
+        local_api = get_kompas_api7()
+        try:
+            for spw, xls in zip(chunk_spw, chunk_xls):
+                result = convert_spw_to_xls(spw, xls, local_api)
+                if result:
+                    print(f"Успешно сохранён: {xls}")
+                else:
+                    print(f"Ошибка конвертации файла: {spw}")
+        finally:
+            pythoncom.CoUninitialize()
+
+    threads = []
+    total_files = len(spw_files)
+    # Разбиваем массивы на чанки и для каждого создаем поток
+    for i in range(0, total_files, chunk_size):
+        chunk_spw = spw_files[i:i+chunk_size]
+        chunk_xls = xls_files[i:i+chunk_size]
+        thread = threading.Thread(target=process_chunk, args=(chunk_spw, chunk_xls))
+        threads.append(thread)
+        thread.start()
+
+    # Дожидаемся завершения всех потоков
+    for thread in threads:
+        thread.join()
+
+    print("Все потоки завершены.")
     
 
 def search_spw(directory):
@@ -120,5 +152,45 @@ if __name__ == "__main__":
     # convert_spw_to_xls(sp_file_path, kompas_api)
     dir = '415.1-Сварочный портал'
     spws = search_spw(dir)
-    xlss = do_a_path_for_xls(spws, 'xls_out')
-    send_to_converter(spws, xlss)
+    xlss1 = do_a_path_for_xls(spws, 'xls1_out')
+    xlss2 = do_a_path_for_xls(spws, 'xls2_out')
+    xlss3 = do_a_path_for_xls(spws, 'xls3_out')
+
+    # Измеряем время выполнения send_to_converter
+    start = time.perf_counter()
+    send_to_converter(spws, xlss1)
+    end = time.perf_counter()
+    elapsed = end - start
+    minutes = int(elapsed // 60)
+    seconds = int(elapsed % 60)
+    milliseconds = int((elapsed - minutes * 60 - seconds) * 1000)
+    with open('conversion_log.txt', 'a', encoding='utf-8') as log_file:
+        log_file.write(f"send_to_converter: {minutes} минут {seconds} секунд {milliseconds} мс\n")
+
+
+    # Измеряем время выполнения convert_spw_to_xls_array с chunk_size=5
+    start = time.perf_counter()
+    convert_spw_to_xls_array(spws, xlss2, 5)
+    end = time.perf_counter()
+    elapsed = end - start
+    minutes = int(elapsed // 60)
+    seconds = int(elapsed % 60)
+    milliseconds = int((elapsed - minutes * 60 - seconds) * 1000)
+    with open('conversion_log.txt', 'a', encoding='utf-8') as log_file:
+        log_file.write(f"convert_spw_to_xls_array (chunk_size=5): {minutes} минут {seconds} секунд {milliseconds} мс\n")
+    print(f"convert_spw_to_xls_array (chunk_size=5): {minutes} минут {seconds} секунд {milliseconds} мс")
+
+
+    # Измеряем время выполнения convert_spw_to_xls_array с chunk_size=10
+    start = time.perf_counter()
+    convert_spw_to_xls_array(spws, xlss3, 10)
+    end = time.perf_counter()
+    elapsed = end - start
+    minutes = int(elapsed // 60)
+    seconds = int(elapsed % 60)
+    milliseconds = int((elapsed - minutes * 60 - seconds) * 1000)
+    with open('conversion_log.txt', 'a', encoding='utf-8') as log_file:
+        log_file.write(f"convert_spw_to_xls_array (chunk_size=10): {minutes} минут {seconds} секунд {milliseconds} мс\n")
+    print(f"convert_spw_to_xls_array (chunk_size=10): {minutes} минут {seconds} секунд {milliseconds} мс")
+
+    print(f'{10*"\n"}DONE DONE DONE')
