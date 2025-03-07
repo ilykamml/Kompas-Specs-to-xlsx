@@ -43,7 +43,7 @@ def convert_spw_to_xls(spw_file, xls_file, kompas_api):
         # Открываем документ
 
         doc7 = app7.Documents.Open(PathName=spw_file,
-                                   Visible=False,
+                                   Visible=True,
                                    ReadOnly=True)
         
         if doc7 is not None:
@@ -131,6 +131,7 @@ def do_a_path_for_xls(spws, output_dir):
         base_name = os.path.splitext(os.path.basename(spw))[0]
         # Формируем путь к xls файлу с таким же именем
         xls_path = os.path.join(output_dir, base_name + '.xls')
+        xls_path = os.path.normpath(xls_path)
         xls_files.append(xls_path)
         
     return xls_files
@@ -154,10 +155,10 @@ if __name__ == "__main__":
     # convert_spw_to_xls(sp_file_path, kompas_api)
     dir = '415.1-Сварочный портал'
     spws = search_spw(dir)
-    spws = spws[:30]
-    xlss1 = do_a_path_for_xls(spws, 'xls1_out')
-    xlss2 = do_a_path_for_xls(spws, 'xls7_out')
-    xlss3 = do_a_path_for_xls(spws, 'xls3_out')
+    spws = spws[:5]
+    # xlss1 = do_a_path_for_xls(spws, 'xls1_out')
+    xlss2 = do_a_path_for_xls(spws, 'xls6_out')
+    # xlss3 = do_a_path_for_xls(spws, 'xls3_out')
 
     # Измеряем время выполнения send_to_converter
     # start = time.perf_counter()
@@ -196,4 +197,5 @@ if __name__ == "__main__":
     #     log_file.write(f"convert_spw_to_xls_array (chunk_size=10): {minutes} минут {seconds} секунд {milliseconds} мс\n")
     # print(f"convert_spw_to_xls_array (chunk_size=10): {minutes} минут {seconds} секунд {milliseconds} мс")
 
-    print(f'{10*"\n"}DONE DONE DONE')
+    # print(f'{10*"\n"}DONE DONE DONE')
+    pass
