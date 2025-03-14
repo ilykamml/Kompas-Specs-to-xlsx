@@ -1,4 +1,5 @@
 import os
+import sys
 import time
 import threading
 import tkinter as tk
@@ -9,11 +10,21 @@ from math import ceil
 progress_count = 0
 progress_lock = threading.Lock()
 
+def resource_path(relative_path):
+    # Если запущено в режиме PyInstaller, используется sys._MEIPASS
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
+
 class ConverterApp(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Конвертер CDW/SPW -> PDF/XLS")
         self.resizable(False, False)
+        icon_path = resource_path("icon.ico")
+        self.iconbitmap(icon_path)
         
         self.input_dir_var = tk.StringVar()
         self.num_of_threads_var = tk.StringVar(value="10")
@@ -161,6 +172,8 @@ class ConverterApp(tk.Tk):
     
     def show_result_window(self, elapsed, folder_to_open):
         result_win = tk.Toplevel(self)
+        icon_path = resource_path("icon.ico")
+        result_win.iconbitmap(icon_path)
         result_win.title("Конвертация завершена")
         result_win.resizable(False, False)
         time_str = time.strftime('%H:%M:%S', time.gmtime(elapsed))
