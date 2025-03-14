@@ -42,9 +42,12 @@ class ConverterApp(tk.Tk):
         # Чекбоксы выбора экспорта
         frame_options = ttk.Frame(self)
         frame_options.pack(fill="x", **padding)
-        ttk.Checkbutton(frame_options, text="Экспорт чертежей (CDW -> PDF)", variable=self.export_cdw_pdf_var).grid(row=0, column=0, sticky="w", padx=5, pady=2)
-        ttk.Checkbutton(frame_options, text="Экспорт спецификаций в PDF (SPW -> PDF)", variable=self.export_spw_pdf_var).grid(row=1, column=0, sticky="w", padx=5, pady=2)
-        ttk.Checkbutton(frame_options, text="Экспорт спецификаций в XLS (SPW -> XLS)", variable=self.export_spw_xls_var).grid(row=2, column=0, sticky="w", padx=5, pady=2)
+        ttk.Checkbutton(frame_options, text="Экспорт чертежей (CDW -> PDF)", variable=self.export_cdw_pdf_var)\
+            .grid(row=0, column=0, sticky="w", padx=5, pady=2)
+        ttk.Checkbutton(frame_options, text="Экспорт спецификаций в PDF (SPW -> PDF)", variable=self.export_spw_pdf_var)\
+            .grid(row=1, column=0, sticky="w", padx=5, pady=2)
+        ttk.Checkbutton(frame_options, text="Экспорт спецификаций в XLS (SPW -> XLS)", variable=self.export_spw_xls_var)\
+            .grid(row=2, column=0, sticky="w", padx=5, pady=2)
         
         # Количество потоков
         frame_threads = ttk.Frame(self)
@@ -134,16 +137,22 @@ class ConverterApp(tk.Tk):
         self.btn_start.configure(state="disabled")
         self.start_time = time.perf_counter()
         
-        threads = []
+        # Запускаем задачи в отдельных потоках
+        self.threads = []
         for task in tasks:
-            t = threading.Thread(target=task)
-            threads.append(t)
+            t = threading.Thread(target=task, daemon=True)
+            self.threads.append(t)
             t.start()
-        for t in threads:
-            t.join()
         
-        elapsed = time.perf_counter() - self.start_time
-        self.show_result_window(elapsed, parent_dir)
+        # Начинаем периодически проверять состояние потоков
+        self.check_threads(parent_dir)
+    
+    def check_threads(self, folder_to_open):
+        if any(t.is_alive() for t in self.threads):
+            self.after(200, lambda: self.check_threads(folder_to_open))
+        else:
+            elapsed = time.perf_counter() - self.start_time
+            self.show_result_window(elapsed, folder_to_open)
     
     def update_progress(self, n):
         global progress_count

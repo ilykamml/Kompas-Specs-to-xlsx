@@ -3,10 +3,12 @@ import time
 import pythoncom
 from win32com.client import Dispatch, DispatchEx, gencache
 import threading
+gencache_lock = threading.Lock()
 
 def get_kompas_api7():
-    module = gencache.EnsureModule("{69AC2981-37C0-4379-84FD-5DD2F3C0A520}", 0, 1, 0)
-    const_module = gencache.EnsureModule("{75C9F5D0-B5B8-4526-8681-9903C567D2ED}", 0, 1, 0)
+    with gencache_lock:
+        module = gencache.EnsureModule("{69AC2981-37C0-4379-84FD-5DD2F3C0A520}", 0, 1, 0)
+        const_module = gencache.EnsureModule("{75C9F5D0-B5B8-4526-8681-9903C567D2ED}", 0, 1, 0)
     const = const_module.constants
     app = DispatchEx('Kompas.Application.7')
     time.sleep(2)
