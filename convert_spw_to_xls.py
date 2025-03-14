@@ -3,6 +3,8 @@ import time
 import pythoncom
 from win32com.client import Dispatch, DispatchEx, gencache
 import threading
+
+# Для синхронизации вызова gencache.EnsureModule в многопоточном режиме
 gencache_lock = threading.Lock()
 
 def get_kompas_api7():
@@ -23,7 +25,7 @@ def get_kompas_api7():
 def convert_spw_to_xls(spw_file, xls_file, kompas_api):
     try:
         module7, api7, const7, app7 = kompas_api
-        print("Начало конвертации SPW в XLS...")
+        print("Начало конвертации SPW в XLS для файла:", spw_file)
         if not os.path.exists(spw_file):
             print(f"Файл не найден: {spw_file}")
             return ""
@@ -35,11 +37,11 @@ def convert_spw_to_xls(spw_file, xls_file, kompas_api):
         else:
             print('Не удалось сохранить документ в XLS')
             return ""
-        print("Конвертация SPW в XLS завершена")
+        print("Конвертация SPW в XLS завершена для файла:", spw_file)
         doc7.Close(const7.kdDoNotSaveChanges)
         return xls_file
     except Exception as e:
-        print(f"Ошибка: {e}")
+        print(f"Ошибка при конвертации {spw_file} в XLS: {e}")
         return ""
 
 def convert_to_pdf(input_file, pdf_file, kompas_api):
@@ -49,7 +51,6 @@ def convert_to_pdf(input_file, pdf_file, kompas_api):
         if not os.path.exists(input_file):
             print(f"Файл не найден: {input_file}")
             return ""
-        print("Открываем документ для PDF...")
         doc7 = app7.Documents.Open(PathName=input_file, Visible=True, ReadOnly=True)
         if doc7 is not None:
             doc7.SaveAs(pdf_file)
@@ -57,37 +58,40 @@ def convert_to_pdf(input_file, pdf_file, kompas_api):
         else:
             print('Не удалось сохранить документ в PDF')
             return ""
-        print("Конвертация в PDF завершена")
+        print("Конвертация в PDF завершена для файла:", input_file)
         doc7.Close(const7.kdDoNotSaveChanges)
         return pdf_file
     except Exception as e:
-        print(f"Ошибка: {e}")
+        print(f"Ошибка при конвертации {input_file} в PDF: {e}")
         return ""
 
-def search_files(directory, extensions):
+def search_spw(directory):
     if not os.path.isdir(directory):
         print(f"Директория не найдена или не является каталогом: {directory}")
         return []
-    found_files = []
+    spw_files = []
     for root, _, files in os.walk(directory):
         for file in files:
-            for ext in extensions:
-                if file.lower().endswith(ext):
-                    found_files.append(os.path.abspath(os.path.join(root, file)))
-                    break
-    return found_files
-
-def search_spw(directory):
-    return search_files(directory, ['.spw'])
+            if file.lower().endswith('.spw'):
+                spw_files.append(os.path.abspath(os.path.join(root, file)))
+    return spw_files
 
 def search_cdw(directory):
-    return search_files(directory, ['.cdw'])
+    if not os.path.isdir(directory):
+        print(f"Директория не найдена или не является каталогом: {directory}")
+        return []
+    cdw_files = []
+    for root, _, files in os.walk(directory):
+        for file in files:
+            if file.lower().endswith('.cdw'):
+                cdw_files.append(os.path.abspath(os.path.join(root, file)))
+    return cdw_files
 
 def do_a_path_for_xls(files, output_dir):
     if not os.path.isabs(output_dir):
         output_dir = os.path.abspath(output_dir)
     if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
+        os.makedirs(output_dir, exist_ok=True)
     xls_files = []
     for file in files:
         base_name = os.path.splitext(os.path.basename(file))[0]
@@ -99,7 +103,7 @@ def do_a_path_for_pdf(files, output_dir):
     if not os.path.isabs(output_dir):
         output_dir = os.path.abspath(output_dir)
     if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
+        os.makedirs(output_dir, exist_ok=True)
     pdf_files = []
     for file in files:
         base_name = os.path.splitext(os.path.basename(file))[0]
@@ -107,10 +111,11 @@ def do_a_path_for_pdf(files, output_dir):
         pdf_files.append(os.path.normpath(pdf_path))
     return pdf_files
 
-def convert_spw_to_xls_array(spw_files, xls_files, chunk_size=10):
+def convert_spw_to_xls_array(spw_files, xls_files, chunk_size=10, update_callback=None):
     if len(spw_files) != len(xls_files):
         print("Количество SPW файлов и XLS файлов не совпадает.")
         return
+
     def process_chunk(chunk_spw, chunk_xls):
         import pythoncom
         pythoncom.CoInitialize()
@@ -119,12 +124,15 @@ def convert_spw_to_xls_array(spw_files, xls_files, chunk_size=10):
             for spw, xls in zip(chunk_spw, chunk_xls):
                 result = convert_spw_to_xls(spw, xls, local_api)
                 if result:
-                    print('SPW -> XLS conversion done.')
+                    print('SPW -> XLS conversion done for:', xls)
                 else:
                     print(f"Ошибка конвертации SPW файла: {spw}")
+                if update_callback is not None:
+                    update_callback(1)
         finally:
             local_api[3].Quit()
             pythoncom.CoUninitialize()
+
     threads = []
     total_files = len(spw_files)
     for i in range(0, total_files, chunk_size):
@@ -133,14 +141,17 @@ def convert_spw_to_xls_array(spw_files, xls_files, chunk_size=10):
         thread = threading.Thread(target=process_chunk, args=(chunk_spw, chunk_xls))
         threads.append(thread)
         thread.start()
+
     for thread in threads:
         thread.join()
+
     print("Все потоки для SPW -> XLS завершены.")
 
-def convert_files_to_pdf_array(input_files, pdf_files, chunk_size=10):
+def convert_files_to_pdf_array(input_files, pdf_files, chunk_size=10, update_callback=None):
     if len(input_files) != len(pdf_files):
         print("Количество файлов и PDF файлов не совпадает.")
         return
+
     def process_chunk(chunk_inputs, chunk_pdfs):
         import pythoncom
         pythoncom.CoInitialize()
@@ -149,12 +160,15 @@ def convert_files_to_pdf_array(input_files, pdf_files, chunk_size=10):
             for input_file, pdf in zip(chunk_inputs, chunk_pdfs):
                 result = convert_to_pdf(input_file, pdf, local_api)
                 if result:
-                    print('PDF conversion done.')
+                    print('PDF conversion done for:', pdf)
                 else:
                     print(f"Ошибка конвертации файла: {input_file}")
+                if update_callback is not None:
+                    update_callback(1)
         finally:
             local_api[3].Quit()
             pythoncom.CoUninitialize()
+
     threads = []
     total_files = len(input_files)
     for i in range(0, total_files, chunk_size):
@@ -163,8 +177,10 @@ def convert_files_to_pdf_array(input_files, pdf_files, chunk_size=10):
         thread = threading.Thread(target=process_chunk, args=(chunk_inputs, chunk_pdfs))
         threads.append(thread)
         thread.start()
+
     for thread in threads:
         thread.join()
+
     print("Все потоки для PDF конвертации завершены.")
 
 if __name__ == "__main__":
@@ -172,14 +188,16 @@ if __name__ == "__main__":
     input_dir = 'path_to_input'
     spw_files = search_spw(input_dir)
     cdw_files = search_cdw(input_dir)
+    
     # SPW -> XLS
     xls_output_dir = 'output_xls'
     xls_files = do_a_path_for_xls(spw_files, xls_output_dir)
-    convert_spw_to_xls_array(spw_files, xls_files, chunk_size=2)
+    convert_spw_to_xls_array(spw_files, xls_files, chunk_size=2, update_callback=lambda n: print("Progress +", n))
+    
     # PDF конвертации
     pdf_spec_output_dir = 'output_pdf_spec'
     pdf_drawing_output_dir = 'output_pdf_drawing'
     spw_pdf_files = do_a_path_for_pdf(spw_files, pdf_spec_output_dir)
     cdw_pdf_files = do_a_path_for_pdf(cdw_files, pdf_drawing_output_dir)
-    convert_files_to_pdf_array(spw_files, spw_pdf_files, chunk_size=2)
-    convert_files_to_pdf_array(cdw_files, cdw_pdf_files, chunk_size=2)
+    convert_files_to_pdf_array(spw_files, spw_pdf_files, chunk_size=2, update_callback=lambda n: print("Progress +", n))
+    convert_files_to_pdf_array(cdw_files, cdw_pdf_files, chunk_size=2, update_callback=lambda n: print("Progress +", n))

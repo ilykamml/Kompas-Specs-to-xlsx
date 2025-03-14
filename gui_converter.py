@@ -98,31 +98,30 @@ class ConverterApp(tk.Tk):
         
         tasks = []
         total = 0
+        # Если выбран экспорт SPW, ищем такие файлы, иначе пустой список
         spw_files = search_spw(input_dir) if (self.export_spw_pdf_var.get() or self.export_spw_xls_var.get()) else []
         cdw_files = search_cdw(input_dir) if self.export_cdw_pdf_var.get() else []
         
+        # Здесь передаём self.update_progress в качестве callback, чтобы после каждого файла прогресс обновлялся
         if self.export_spw_xls_var.get():
             spw_xls_files = do_a_path_for_xls(spw_files, output_spw_xls)
             total += len(spw_files)
             def run_spw_xls():
-                convert_spw_to_xls_array(spw_files, spw_xls_files, chunk_size=num_threads)
-                self.update_progress(len(spw_files))
+                convert_spw_to_xls_array(spw_files, spw_xls_files, chunk_size=num_threads, update_callback=self.update_progress)
             tasks.append(run_spw_xls)
         
         if self.export_spw_pdf_var.get():
             spw_pdf_files = do_a_path_for_pdf(spw_files, output_spw_pdf)
             total += len(spw_files)
             def run_spw_pdf():
-                convert_files_to_pdf_array(spw_files, spw_pdf_files, chunk_size=num_threads)
-                self.update_progress(len(spw_files))
+                convert_files_to_pdf_array(spw_files, spw_pdf_files, chunk_size=num_threads, update_callback=self.update_progress)
             tasks.append(run_spw_pdf)
         
         if self.export_cdw_pdf_var.get():
             cdw_pdf_files = do_a_path_for_pdf(cdw_files, output_cdw_pdf)
             total += len(cdw_files)
             def run_cdw_pdf():
-                convert_files_to_pdf_array(cdw_files, cdw_pdf_files, chunk_size=num_threads)
-                self.update_progress(len(cdw_files))
+                convert_files_to_pdf_array(cdw_files, cdw_pdf_files, chunk_size=num_threads, update_callback=self.update_progress)
             tasks.append(run_cdw_pdf)
         
         if total == 0:
